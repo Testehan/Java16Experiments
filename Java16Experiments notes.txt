@@ -1,0 +1,169 @@
+Check here all new features of Java 16 : https://openjdk.org/projects/jdk/16/
+
+
+
+JDK 16 new features
+
+    1. JEP 394: Pattern Matching for instanceof
+        Motivation
+            Nearly every program includes some sort of logic that combines testing if an expression has a certain \
+            type or structure, and then conditionally extracting components of its state for further processing.
+            For example, all Java programmers are familiar with the instanceof-and-cast idiom:
+                if (obj instanceof String) {
+                    String s = (String) obj;    // grr...
+                    ...
+                }
+
+            There are three things going on here: a test (is obj a String?), a conversion (casting obj to String), \
+            and the declaration of a new local variable (s) so that we can use the string value. This pattern is
+            straightforward and understood by all Java programmers, but is suboptimal for several reasons. It is tedious;
+            doing both the type test and cast should be unnecessary (what else would you do after an instanceof test?).
+            This boilerplate — in particular, the three occurrences of the type String — obfuscates the more significant
+            logic that follows. But most importantly, the repetition provides opportunities for errors to creep unnoticed
+            into programs.
+
+            Rather than reach for ad-hoc solutions, we believe it is time for Java to embrace pattern matching. Pattern
+            matching allows the desired "shape" of an object to be expressed concisely (the pattern), and
+            for various statements and expressions to test that "shape" against their input (the matching). Many languages,
+            from Haskell to C#, have embraced pattern matching for its brevity and safety.
+
+        Description
+            A pattern is a combination of (1) a predicate, or test, that can be applied to a target, and (2) a set of
+            local variables, known as pattern variables, that are extracted from the target only if the predicate
+            successfully applies to it.
+
+            A type pattern consists of a predicate that specifies a type, along with a single pattern variable.
+            The instanceof operator (JLS 15.20.2) is extended to take a type pattern instead of just a type
+
+            This allows us to refactor the tedious code above to the following:
+
+            if (obj instanceof String s) {
+                // Let pattern matching do the work!
+                ...
+            }
+
+            (In this code, the phrase String s is the type pattern.) The meaning is intuitive. The instanceof operator
+            matches the target obj to the type pattern as follows: If obj is an instance of String, then it is cast
+            to String and the value is assigned to the variable s.
+
+    2. JEP 395: Records
+        Summary
+            Enhance the Java programming language with records, which are classes that act as transparent carriers for
+            immutable data.
+
+        Motivation
+            It is a common complaint that "Java is too verbose" or has "too much ceremony". Some of the worst offenders are
+            classes that are nothing more than immutable data carriers for a handful of values. Properly writing such a
+            data-carrier class involves a lot of low-value, repetitive, error-prone code: constructors, accessors,
+            equals, hashCode, toString, etc. For example, a class to carry x and y coordinates inevitably ends up like this:
+
+                class Point {
+                    private final int x;
+                    private final int y;
+
+                    Point(int x, int y) {
+                        this.x = x;
+                        this.y = y;
+                    }
+
+                    int x() { return x; }
+                    int y() { return y; }
+
+                    public boolean equals(Object o) {
+                        if (!(o instanceof Point)) return false;
+                        Point other = (Point) o;
+                        return other.x == x && other.y == y;
+                    }
+
+                    public int hashCode() {
+                        return Objects.hash(x, y);
+                    }
+
+                    public String toString() {
+                        return String.format("Point[x=%d, y=%d]", x, y);
+                    }
+                }
+
+            While it is superficially tempting to treat records as primarily being about boilerplate reduction, we instead
+            choose a more semantic goal: modeling data as data. (If the semantics are right, the boilerplate will take care
+            of itself.) It should be easy and concise to declare data-carrier classes that by default make their data
+            immutable and provide idiomatic implementations of methods that produce and consume the data
+
+        Description
+            Record classes are a new kind of class in the Java language. Record classes help to model plain data
+            aggregates with less ceremony than normal classes.
+            The declaration of a record class primarily consists of a declaration of its state; the record class then
+            commits to an API that matches that state. This means that record classes give up a freedom that classes
+            usually enjoy — the ability to decouple a class's API from its internal representation — but, in return,
+            record class declarations become significantly more concise.
+
+            More precisely, a record class declaration consists of a name, optional type parameters, a header, and a
+            body. The header lists the components of the record class, which are the variables that make up its state.
+            (This list of components is sometimes referred to as the state description.) For example:
+                record Point(int x, int y) { }
+
+            Because record classes make the semantic claim of being transparent carriers for their data, a record class
+            acquires many standard members automatically:
+                -For each component in the header, two members: a public accessor method with the same name and return
+                type as the component, and a private final field with the same type as the component;
+                -A canonical constructor whose signature is the same as the header, and which assigns each private field
+                to the corresponding argument from a new expression which instantiates the record;
+                -equals and hashCode methods which ensure that two record values are equal if they are of the same type
+                and contain equal component values;
+                -A toString method that returns a string representation of all the record components, along with their names
+
+            Constructors for record classes
+            The rules for constructors in a record class are different than in a normal class. A normal class without
+            any constructor declarations is automatically given a default constructor. In contrast, a record class
+            without any constructor declarations is automatically given a canonical constructor that assigns all
+            the private fields to the corresponding arguments of the new expression which instantiated the record
+
+        Rules for record classes
+            There are numerous restrictions on the declaration of a record class in comparison to a normal class:
+                -A record class declaration does not have an extends clause. The superclass of a record class is always
+                java.lang.Record, similar to how the superclass of an enum class is always java.lang.Enum. Even though a
+                normal class can explicitly extend its implicit superclass Object, a record cannot explicitly extend any
+                class, even its implicit superclass Record.
+                -A record class is implicitly final, and cannot be abstract. These restrictions emphasize that the API
+                of a record class is defined solely by its state description, and cannot be enhanced later by another class.
+                -The fields derived from the record components are final. This restriction embodies an immutable by default
+                policy that is widely applicable for data-carrier classes.
+                -A record class cannot explicitly declare instance fields, and cannot contain instance initializers. These
+                restrictions ensure that the record header alone defines the state of a record value.
+                -Any explicit declarations of a member that would otherwise be automatically derived must match the type
+                of the automatically derived member exactly, disregarding any annotations on the explicit declaration.
+                Any explicit implementation of accessors or the equals or hashCode methods should be careful to preserve
+                the semantic invariants of the record class.
+                -A record class cannot declare native methods. If a record class could declare a native method then the
+                behavior of the record class would by definition depend on external state rather than the record class's
+                explicit state. No class with native methods is likely to be a good candidate for migration to a record.
+
+            Beyond the restrictions above, a record class behaves like a normal class:
+                -Instances of record classes are created using a new expression.
+                -A record class can be declared top level or nested, and can be generic.
+                -A record class can declare static methods, fields, and initializers.
+                -A record class can declare instance methods.
+                -A record class can implement interfaces. A record class cannot specify a superclass since that would
+                mean inherited state, beyond the state described in the header. A record class can, however, freely specify
+                superinterfaces and declare instance methods to implement them. Just as for classes, an interface can
+                usefully characterize the behavior of many records. The behavior may be domain-independent (e.g., Comparable)
+                or domain-specific, in which case records can be part of a sealed hierarchy which captures the domain (see below).
+                -A record class can declare nested types, including nested record classes. If a record class is itself nested,
+                then it is implicitly static; this avoids an immediately enclosing instance which would silently add
+                state to the record class.
+                -A record class, and the components in its header, may be decorated with annotations. Any annotations on
+                the record components are propagated to the automatically derived fields, methods, and constructor parameters,
+                according to the set of applicable targets for the annotation. Type annotations on the types of record
+                components are also propagated to the corresponding type uses in the automatically derived members.
+                -Instances of record classes can be serialized and deserialized. However, the process cannot be customized
+                by providing writeObject, readObject, readObjectNoData, writeExternal, or readExternal methods. The components
+                of a record class govern serialization, while the canonical constructor of a record class governs
+                deserialization.
+
+        Local record classes
+            A program that produces and consumes instances of a record class is likely to deal with many intermediate
+            values that are themselves simple groups of variables. It will often be convenient to declare record classes
+            to model those intermediate values. One option is to declare "helper" record classes that are static and
+            nested, much as many programs declare helper classes today. A more convenient option would be to declare
+            a record inside a method, close to the code which manipulates the variables.
+
